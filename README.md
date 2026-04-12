@@ -48,11 +48,34 @@ Input -> Register -> LUT-based Scoring -> Register -> Decision Logic -> Output
 
 ## 4. Block Diagram
 
-+---------+     +------------------+     +---------------------+     +------------------+     +------------------+     +-----------+
-| in_bits | --> | Input Register   | --> | LUT Feature Layer   | --> | Class Scoring    | --> | Decision Logic   | --> | class_out |
-+---------+     +------------------+     | (masked LUT logic)  |     | + Aggregation    |     |   (Argmax)       |     +-----------+
-                                        +---------------------+     +------------------+     +------------------+
-
+Input (in_bits)
+      │
+      ▼
++------------------+
+| Input Register   |
++------------------+
+      │
+      ▼
++---------------------+
+| LUT Feature Layer   |
+| (masked LUT logic)  |
++---------------------+
+      │
+      ▼
++------------------+
+| Class Scoring    |
+| + Aggregation    |
++------------------+
+      │
+      ▼
++------------------+
+| Decision Logic   |
+| (Argmax)         |
++------------------+
+      │
+      ▼
+   class_out
+   
 ---
 
 
