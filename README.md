@@ -1,121 +1,182 @@
 # LUT-based Inference Pipeline (Verilog)
 
+---
+
 ## 1. Project Motivation
 
-This project was built to explore how neural network inference can be mapped onto simple digital hardware structures.
+This project explores how simple inference-like behavior can be implemented using basic digital hardware structures.
 
-Instead of using conventional multiply-accumulate (MAC)-based implementations, this design focuses on a lookup-table (LUT) based approach, which aligns more naturally with FPGA architectures.
+Instead of relying on conventional multiply-accumulate (MAC) operations, the design uses lookup-table (LUT) based logic to map inputs directly to outputs. This approach aligns naturally with FPGA architectures and helps focus on bit-level dataflow rather than numerical computation.
 
-The goal was to understand how a small inference pipeline can be constructed using basic RTL building blocks such as combinational logic, registers, and simple control signals.
+The goal was to build a small, fully synchronous pipeline using fundamental RTL components such as combinational logic, registers, and control signals.
 
 ---
 
 ## 2. Why LUT-based Inference?
 
-LUT-based inference is interesting from a hardware perspective for several reasons:
+From a hardware perspective, LUT-based computation has several advantages:
 
-- **FPGA compatibility**: FPGAs are built around LUTs, so mapping inference directly to LUT operations avoids unnecessary arithmetic overhead
-- **Low-complexity computation**: Eliminates multipliers and reduces logic depth
-- **Deterministic latency**: Each lookup operation has predictable timing
-- **Hardware-awareness**: Encourages thinking in terms of dataflow and bit-level representation rather than floating-point operations
+- **FPGA-native structure**  
+  FPGAs are composed of LUTs, so mapping logic directly to LUT-style computation avoids unnecessary abstraction
 
-This project is a simplified attempt to understand these properties at the RTL level.
+- **Low complexity**  
+  Eliminates multipliers and reduces arithmetic depth
+
+- **Deterministic timing**  
+  Each stage has fixed latency, making timing predictable
+
+- **Bit-level control**  
+  Encourages reasoning in terms of bit masking and combinational mapping
+
+This project demonstrates these properties using a simplified RTL implementation.
 
 ---
 
 ## 3. Design Overview
 
-The design implements a small pipelined inference module with the following stages:
+The design implements a multi-stage pipelined inference structure:
 Input -> Register -> LUT-based Scoring -> Register -> Decision Logic -> Output
 
-- Inputs are captured and stabilized using registers
-- Each class score is computed using LUT-based combinational logic
-- Intermediate results are stored in registers to form a pipeline
-- Final output is selected using simple decision logic (argmax)
-
-The design uses valid signals to control data propagation across stages.
+- Inputs are first registered to stabilize data
+- A LUT-based feature layer generates intermediate feature vectors using masked inputs
+- Feature values are mapped to per-class scores using combinational logic
+- Class scores are accumulated for each class
+- Final output is selected using simple comparison logic (argmax)
+- Valid signals control data movement across pipeline stages
 
 ---
 
 ## 4. Block Diagram
 
-+--------+    +------------------+    +------------------+    +------------------+    +------------------+    +-----------+
-| n_bits | -> |  Input Register  | -> |    LUT Layer     | -> | Score Registers  | -> |  Decision Logic  | -> | class_out |
-+--------+    +------------------+    | (Score Compute)  |    +------------------+    |     (Argmax)     |    +-----------+
-                                      +------------------+                            +------------------+
+
+
+---
 
 ---
 
 ## 5. Module Structure
 
-The project is organized into a few simple modules:
+The design is divided into small, focused RTL modules:
 
 - `inference_top.v`  
-  Top-level module that connects all stages and manages pipeline flow
+  Top-level module that connects all pipeline stages and manages valid signals
 
-- `lut_layer.v`  
-  Computes class scores based on LUT-style combinational logic
+- `lut_feature_layer.v`  
+  Generates feature vectors using masked LUT-based neurons
 
-- `lut_neuron.v`  
-  Basic building block representing a small LUT-based computation unit
+- `lut_feature_neuron.v`  
+  Basic LUT unit that maps input bits to small output values
+
+- `class_scoring_layer.v`  
+  Converts feature vectors into per-class partial scores
+
+- `class_scoring_neuron.v`  
+  Small combinational blocks used to compute class scores
+
+- `class_aggregator.v`  
+  Accumulates partial scores into final class-wise sums
 
 - `decision_logic.v`  
-  Selects the class with the highest score
+  Selects the final class output based on maximum score
 
 - `inference_top_tb.v`  
-  Testbench used for simulation and verification
-
-The structure is intentionally kept simple to focus on dataflow rather than abstraction.
+  Testbench for simulation
 
 ---
 
 ## 6. Simulation and Verification
 
-The design was verified using:
+Simulation was performed using:
 
 - **Icarus Verilog (iverilog)** for compilation
 - **GTKWave** for waveform inspection
 
-### Verification approach
+### Verification Approach
 
 - Applied multiple input patterns through the testbench
-- Checked reset behavior to ensure registers were properly initialized
-- Observed valid signal propagation across pipeline stages
-- Verified that outputs appear after expected latency
-- Compared final `class_out` with intermediate class scores
-
-### Key observation
-
-The waveform confirms that:
-
-- `in_valid` propagates through pipeline stages (`valid_s1`, `valid_s2`, `out_valid`)
-- Data is correctly registered between stages
-- The final output corresponds to the maximum class score
+- Observed behavior under different mask configurations
+- Checked valid signal propagation across pipeline stages
+- Verified correct accumulation of class scores
+- Confirmed that output corresponds to the maximum class score
 
 ---
 
-## 7. Engineering Concepts Demonstrated
+## 7. Waveform Results
 
-This project demonstrates several core digital design concepts:
+### 1. Pipeline Overview
 
-- **RTL design and modular decomposition**
-- **Combinational vs sequential logic separation**
-- **Pipeline design and latency control**
-- **Valid signal-based dataflow control**
-- **Hardware-oriented thinking for ML inference**
-- **Waveform-based debugging and verification**
+<img width="1188" height="419" alt="lut1" src="https://github.com/user-attachments/assets/08e580ab-79bb-4ae9-9bb4-38c313962217" />
+
+This waveform shows how input data propagates through the pipeline.  
+Each stage is separated by registers, forming a multi-cycle processing flow.
 
 ---
 
-## 8. Future Extensions
+### 2. Feature Extraction (LUT Layer)
 
-There are several directions this project could be extended:
+<img width="1170" height="292" alt="lut2" src="https://github.com/user-attachments/assets/fee985fe-926b-4160-a340-08493c75b60b" />
 
-- Supporting more input bits or classes
-- Increasing LUT complexity to better approximate real neural networks
-- Adding parameterization (e.g., number of neurons, bit-width)
-- Integrating with FPGA synthesis tools (Vivado)
-- Replacing static LUT logic with trained weight mapping
-- Exploring sparsity or pruning at the hardware level
+Masked input bits are processed through LUT-based neurons to generate feature vectors.
 
 ---
+
+### 3. Class Scoring
+
+<img width="1170" height="152" alt="lut3" src="https://github.com/user-attachments/assets/461ff872-ef66-4b0e-835a-debf4ee8094a" />
+
+Feature vectors are mapped to per-class partial scores using combinational logic.
+
+---
+
+### 4. Aggregation and Decision
+
+<img width="1171" height="149" alt="lut4" src="https://github.com/user-attachments/assets/394bed10-78f0-4172-b221-9ae4e5a1b8bc" />
+
+Partial scores are accumulated, and the final class is selected using simple comparison logic.
+
+---
+
+### 5. Mask Effect
+
+<img width="1074" height="473" alt="lut5" src="https://github.com/user-attachments/assets/f81014be-17e7-40e3-a931-34e5b0c4837a" />
+
+For the same input value, changing the mask alters the generated feature vectors and class scores.
+
+This shows that masking directly influences the dataflow and final output.
+
+---
+
+## 8. Engineering Concepts Demonstrated
+
+This project demonstrates several core digital design principles:
+
+- RTL-based modular design
+- Separation of combinational and sequential logic
+- Pipeline structure and stage isolation
+- Valid signal-based dataflow control
+- Bit-level manipulation using masking
+- Waveform-based debugging and verification
+
+---
+
+## 9. How to Run
+
+### Compile
+
+```bash
+iverilog -o simv \
+inference_top_tb.v \
+inference_top.v \
+decision_logic.v \
+class_aggregator.v \
+class_scoring_layer.v \
+class_scoring_neuron.v \
+lut_feature_layer.v \
+lut_feature_neuron.v
+
+### Run Simulation
+vvp simv
+
+### View Waveform
+gtkwave wave.vcd
+
