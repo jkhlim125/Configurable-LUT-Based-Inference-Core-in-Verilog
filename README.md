@@ -173,10 +173,15 @@ class_scoring_layer.v \
 class_scoring_neuron.v \
 lut_feature_layer.v \
 lut_feature_neuron.v
+```
 
 ### Run Simulation
+```bash
 vvp simv
+```
 
 ### View Waveform
+```bash
 gtkwave wave.vcd
+```
 
