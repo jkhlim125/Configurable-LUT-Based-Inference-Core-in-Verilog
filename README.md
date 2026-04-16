@@ -1,191 +1,152 @@
-# LUT-based Inference Pipeline (Verilog)
+# LUT vs MAC Inference Pipeline (RTL + Latency Analysis)
 
 ---
 
-## 1. Project Motivation
+## 1. Overview
 
-This project explores how simple inference-like behavior can be implemented using basic digital hardware structures.
+This project implements and compares two hardware inference pipelines in RTL:
 
-Instead of relying on conventional multiply-accumulate (MAC) operations, the design uses lookup-table (LUT) based logic to map inputs directly to outputs. This approach aligns naturally with FPGA architectures and helps focus on bit-level dataflow rather than numerical computation.
+- LUT-based inference (lookup-table driven)
+- MAC-based inference (multiply-accumulate style)
 
-The goal was to build a small, fully synchronous pipeline using fundamental RTL components such as combinational logic, registers, and control signals.
+Both pipelines process the same input stream under identical control conditions, enabling direct comparison of datapath structure and latency.
 
----
-
-## 2. Why LUT-based Inference?
-
-From a hardware perspective, LUT-based computation has several advantages:
-
-- **FPGA-native structure**  
-  FPGAs are composed of LUTs, so mapping logic directly to LUT-style computation avoids unnecessary abstraction
-
-- **Low complexity**  
-  Eliminates multipliers and reduces arithmetic depth
-
-- **Deterministic timing**  
-  Each stage has fixed latency, making timing predictable
-
-- **Bit-level control**  
-  Encourages reasoning in terms of bit masking and combinational mapping
-
-This project demonstrates these properties using a simplified RTL implementation.
+The focus is not only on implementation, but on verifying timing behavior using cycle-accurate, event-based measurement.
 
 ---
 
-## 3. Design Overview
+## 2. Design Concept
 
-The design implements a multi-stage pipelined inference structure:
-Input -> Register -> LUT-based Scoring -> Register -> Decision Logic -> Output
+Two pipelines operate in parallel:
 
-- Inputs are first registered to stabilize data
-- A LUT-based feature layer generates intermediate feature vectors using masked inputs
-- Feature values are mapped to per-class scores using combinational logic
-- Class scores are accumulated for each class
-- Final output is selected using simple comparison logic (argmax)
-- Valid signals control data movement across pipeline stages
+Input → LUT pipeline → Output (LUT)
+      → MAC pipeline → Output (MAC)
 
----
+Key idea:
+- Same input
+- Same control
+- Different datapath
 
-## 4. Block Diagram
-
-
-```
-+---------+     +------------------+     +---------------------+     +------------------+     +------------------+     +-----------+
-| in_bits | --> | Input Register   | --> | LUT Feature Layer   | --> | Class Scoring    | --> | Decision Logic   | --> | class_out |
-+---------+     +------------------+     | (masked LUT logic)  |     | + Aggregation    |     |   (Argmax)       |     +-----------+
-                                        +---------------------+     +------------------+     +------------------+
-```
----
-
-
-## 5. Module Structure
-
-The design is divided into small, focused RTL modules:
-
-- `inference_top.v`  
-  Top-level module that connects all pipeline stages and manages valid signals
-
-- `lut_feature_layer.v`  
-  Generates feature vectors using masked LUT-based neurons
-
-- `lut_feature_neuron.v`  
-  Basic LUT unit that maps input bits to small output values
-
-- `class_scoring_layer.v`  
-  Converts feature vectors into per-class partial scores
-
-- `class_scoring_neuron.v`  
-  Small combinational blocks used to compute class scores
-
-- `class_aggregator.v`  
-  Accumulates partial scores into final class-wise sums
-
-- `decision_logic.v`  
-  Selects the final class output based on maximum score
-
-- `inference_top_tb.v`  
-  Testbench for simulation
+→ Enables direct latency comparison
 
 ---
 
-## 6. Simulation and Verification
+## 3. Pipeline Structure
 
-Simulation was performed using:
+Both pipelines follow:
 
-- **Icarus Verilog (iverilog)** for compilation
-- **GTKWave** for waveform inspection
+Input → Register → Feature Extraction → Scoring → Aggregation → Decision → Output
 
-### Verification Approach
-
-- Applied multiple input patterns through the testbench
-- Observed behavior under different mask configurations
-- Checked valid signal propagation across pipeline stages
-- Verified correct accumulation of class scores
-- Confirmed that output corresponds to the maximum class score
+Difference:
+- MAC pipeline contains one additional register stage
+- This should introduce +1 cycle latency
 
 ---
 
-## 7. Waveform Results
+## 4. Module Structure
 
-### 1. Pipeline Overview
+rtl/
+- inference_top.v            (top-level, instantiates both pipelines)
+- *_lut.v                   (LUT-based logic)
+- *_mac.v                   (MAC-based logic with pipeline stage)
+- class_aggregator.v
+- decision_logic.v
 
-<img width="1188" height="419" alt="lut1" src="https://github.com/user-attachments/assets/08e580ab-79bb-4ae9-9bb4-38c313962217" />
+tb/
+- inference_top_tb.v        (testbench with latency measurement)
 
-This waveform shows how input data propagates through the pipeline.  
-Each stage is separated by registers, forming a multi-cycle processing flow.
-
----
-
-### 2. Feature Extraction (LUT Layer)
-
-<img width="1170" height="292" alt="lut2" src="https://github.com/user-attachments/assets/fee985fe-926b-4160-a340-08493c75b60b" />
-
-Masked input bits are processed through LUT-based neurons to generate feature vectors.
-
----
-
-### 3. Class Scoring
-
-<img width="1170" height="152" alt="lut3" src="https://github.com/user-attachments/assets/461ff872-ef66-4b0e-835a-debf4ee8094a" />
-
-Feature vectors are mapped to per-class partial scores using combinational logic.
+results/
+- waveform screenshots
+- comparison_results.csv
 
 ---
 
-### 4. Aggregation and Decision
+## 5. Event-based Latency Measurement
 
-<img width="1171" height="149" alt="lut4" src="https://github.com/user-attachments/assets/394bed10-78f0-4172-b221-9ae4e5a1b8bc" />
+Latency is measured using real signal events:
 
-Partial scores are accumulated, and the final class is selected using simple comparison logic.
+Start:
+- rising edge of in_valid
+
+End:
+- out_valid_lut  → LUT latency
+- out_valid_mac  → MAC latency
+
+latency = output_cycle − input_cycle
+
+Each run is a single transaction to ensure correct pairing.
+
+Results are logged as:
+
+run_id, latency_lut, latency_mac
 
 ---
 
-### 5. Mask Effect
+## 6. Results
 
-<img width="1074" height="473" alt="lut5" src="https://github.com/user-attachments/assets/f81014be-17e7-40e3-a931-34e5b0c4837a" />
+Measured latency:
 
-For the same input value, changing the mask alters the generated feature vectors and class scores.
+- LUT path: 4 cycles
+- MAC path: 5 cycles
 
-This shows that masking directly influences the dataflow and final output.
+Key observation:
+MAC latency is consistently +1 cycle.
+
+This confirms:
+- the additional pipeline register is effective
+- datapath behavior matches design intent
+- valid signals are correctly aligned
 
 ---
 
-## 8. Engineering Concepts Demonstrated
+## 7. Waveform Verification
 
-This project demonstrates several core digital design principles:
+### Pipeline Execution
+<img width="1069" height="317" alt="lut1" src="https://github.com/user-attachments/assets/0e24d8b8-9c6e-4b6d-80ad-35a4aa10e35d" />
 
-- RTL-based modular design
-- Separation of combinational and sequential logic
-- Pipeline structure and stage isolation
-- Valid signal-based dataflow control
-- Bit-level manipulation using masking
-- Waveform-based debugging and verification
+This waveform shows the overall pipeline behavior. Input-valid events propagate through staged valid signals, and the MAC path produces output one cycle later than the LUT path due to the additional pipeline register.
+
+---
+
+### LUT Path
+<img width="956" height="272" alt="lut2" src="https://github.com/user-attachments/assets/f6d2bb55-1c70-403a-8db1-dbb1d23c3e66" />
+
+This waveform focuses on the LUT path. It shows the propagation of valid signals through the LUT-based feature extraction and scoring stages until the final LUT output becomes valid.
+
+---
+
+### MAC Path
+<img width="869" height="302" alt="lut3" src="https://github.com/user-attachments/assets/3f53f764-37fb-4de5-8db8-df90559ca3a5" />
+
+This waveform focuses on the MAC path. Compared to the LUT path, the MAC pipeline includes an additional registered stage, resulting in a one-cycle delay before the final output becomes valid.
+
+---
+
+### Latency Comparison
+<img width="1069" height="407" alt="lut4" src="https://github.com/user-attachments/assets/a1323f84-9d83-4b96-8e5f-4f681a35dfed" />
+
+This waveform verifies the event-based latency measurement. The LUT output becomes valid 4 cycles after the input-valid event, while the MAC output becomes valid 5 cycles later, confirming the deterministic +1 cycle delay introduced by the additional MAC pipeline stage.
+
+---
+
+## 8. Key Takeaways
+
+- Pipeline depth directly determines latency
+- Latency must be measured using real events, not assumed
+- Valid signal alignment is critical in multi-stage pipelines
+- Small structural changes (1 register) produce measurable timing differences
 
 ---
 
 ## 9. How to Run
 
-### Compile
-
-```bash
+Compile:
 iverilog -o simv \
-inference_top_tb.v \
-inference_top.v \
-decision_logic.v \
-class_aggregator.v \
-class_scoring_layer.v \
-class_scoring_neuron.v \
-lut_feature_layer.v \
-lut_feature_neuron.v
-```
+tb/inference_top_tb.v \
+rtl/*.v
 
-### Run Simulation
-```bash
+Run:
 vvp simv
-```
 
-### View Waveform
-```bash
+View waveform:
 gtkwave wave.vcd
-```
-
