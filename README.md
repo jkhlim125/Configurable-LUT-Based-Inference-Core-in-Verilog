@@ -136,6 +136,10 @@ This waveform verifies the event-based latency measurement. The LUT output becom
 - Valid signal alignment is critical in multi-stage pipelines
 - Small structural changes (1 register) produce measurable timing differences
 
+Although both designs implement similar inference functionality, the MAC-based version introduces additional latency due to sequential accumulation.
+
+In contrast, the LUT-based design relies purely on combinational mapping, allowing faster propagation through the pipeline.
+
 ---
 
 ## 9. How to Run
